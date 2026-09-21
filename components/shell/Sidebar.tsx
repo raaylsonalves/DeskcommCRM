@@ -20,6 +20,14 @@ interface SidebarContentProps {
   collapsed: boolean;
   showCollapseControl?: boolean;
   onNavigate?: () => void;
+  /**
+   * Flipa a largura no cliente na hora do clique (estado do AppShell). A
+   * Server Action (toggleSidebar) continua sendo chamada, mas só para
+   * persistir o cookie para a PRÓXIMA carga — não decide mais o que a tela
+   * mostra AGORA, então não precisa de `revalidatePath` nem de esperar o
+   * round-trip pra largura mudar.
+   */
+  onToggleCollapsed?: () => void;
 }
 
 /**
@@ -34,6 +42,7 @@ export function SidebarContent({
   collapsed,
   showCollapseControl = true,
   onNavigate,
+  onToggleCollapsed,
 }: SidebarContentProps) {
   // A barra lateral aparece em TODA tela — traduzi-la aqui é o que faz a
   // escolha de idioma virar algo visível no primeiro clique.
@@ -331,7 +340,12 @@ export function SidebarContent({
         {showCollapseControl && (
           <button
             type="button"
-            onClick={() => startTransition(() => toggleSidebar(collapsed))}
+            onClick={() => {
+              // Muda a largura JÁ, no cliente — não espera o servidor.
+              onToggleCollapsed?.();
+              // Persiste o cookie em paralelo, só para a PRÓXIMA carga (F5).
+              startTransition(() => toggleSidebar(collapsed));
+            }}
             disabled={isPending}
             className={cn(
               "flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-muted-foreground hover:bg-accent/50 hover:text-foreground",
@@ -352,7 +366,13 @@ export function SidebarContent({
   );
 }
 
-export function Sidebar({ collapsed }: { collapsed: boolean }) {
+export function Sidebar({
+  collapsed,
+  onToggleCollapsed,
+}: {
+  collapsed: boolean;
+  onToggleCollapsed?: () => void;
+}) {
   return (
     <aside
       className={cn(
@@ -379,7 +399,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         collapsed ? "w-16" : "w-60",
       )}
     >
-      <SidebarContent collapsed={collapsed} />
+      <SidebarContent collapsed={collapsed} onToggleCollapsed={onToggleCollapsed} />
     </aside>
   );
 }

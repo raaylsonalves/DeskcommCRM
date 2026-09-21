@@ -1,5 +1,5 @@
 "use client";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Sidebar } from "@/components/shell/Sidebar";
 import { TopBar } from "@/components/shell/TopBar";
 import { BarraDeProgressoNavegacao } from "@/components/shell/BarraDeProgressoNavegacao";
@@ -39,11 +39,16 @@ export function AppShell({ sidebarCollapsed, podeAtender, children }: AppShellPr
   // o `p-6` inteiro é rodapé. Com o painel de chamada na tela, é ele que
   // decide a faixa que o conteúdo perde, e ninguém mais mede isso por fora.
   const ocupacaoDoRodape = useOcupacaoDoRodape();
+  // Estado local otimista: o clique em recolher muda a largura NA HORA, sem
+  // esperar round-trip de servidor. O prop `sidebarCollapsed` só entra aqui
+  // (valor inicial) — depois disso quem manda é o clique. A Server Action
+  // (toggleSidebar) só persiste o cookie em paralelo, para a PRÓXIMA carga.
+  const [collapsed, setCollapsed] = useState(sidebarCollapsed);
   return (
     <div className="flex min-h-screen w-full bg-background">
       <BarraDeProgressoNavegacao />
       <div className="hidden md:block">
-        <Sidebar collapsed={sidebarCollapsed} />
+        <Sidebar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((c) => !c)} />
       </div>
       {/*
         `min-w-0` é o que permite a coluna de conteúdo ENCOLHER. Um flex item

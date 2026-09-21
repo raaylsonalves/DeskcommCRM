@@ -23,7 +23,6 @@
  *
  * O `organization_id` vem de `resolveActiveOrg`, nunca de argumento.
  */
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { audit } from "@/lib/audit";
@@ -121,8 +120,13 @@ export async function definirAgendaDosColegas(
     });
   }
 
-  // O layout monta o `ActiveOrg` que as telas leem; sem invalidar, a mudança só
-  // apareceria no próximo recarregamento completo.
-  revalidatePath("/app", "layout");
+  // Sem `revalidatePath`, de propósito: `colegas_podem_mexer_na_agenda` só é
+  // lida NESTA tela (grep confere — nenhum outro componente/contexto consome
+  // este campo), e o switch já reflete o valor real vindo do corpo da RPC
+  // (`setLigado`, no componente). Um `revalidatePath("/app","layout")` aqui só
+  // forçava o Next a rebuscar toda a árvore da área logada por um dado que
+  // nenhuma outra tela lê — mesmo defeito do botão de recolher o menu. A
+  // aplicação da regra em si é sempre ao vivo, na RPC (`fn_...na_agenda`), não
+  // depende de nenhum cache de UI.
   return { ok: true, ...resultado.data };
 }
