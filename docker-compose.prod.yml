@@ -405,6 +405,9 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       ACME_EMAIL: ${ACME_EMAIL}
+      # Vazio nunca chega ao Caddyfile como "": o default embutido no
+      # ${WAHA_DOMAIN:...} do Caddyfile cobre esse caso. Só precisa CHEGAR.
+      WAHA_DOMAIN: ${WAHA_DOMAIN:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data           # certificados Let's Encrypt (persistir!)
