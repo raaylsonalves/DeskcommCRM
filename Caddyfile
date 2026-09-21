@@ -43,3 +43,12 @@
 		reverse_proxy app:3000
 	}
 }
+
+# Publica o WAHA quando o app roda em OUTRO host (ex: Vercel) e precisa
+# alcançar esta API pela internet. A autenticação por X-Api-Key/HMAC do
+# próprio WAHA é o gate. Default é um domínio inerte (nunca resolve, nunca
+# emite certificado real) — Caddy não aceita endereço de site vazio, e um
+# bloco vazio derrubaria a instalação de quem não usa esta topologia.
+{$WAHA_DOMAIN:waha-desligado.invalid} {
+	reverse_proxy waha:3000
+}
