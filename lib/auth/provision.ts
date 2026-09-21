@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { audit } from "@/lib/audit";
+import { aplicarConvite } from "@/lib/auth/aplicar-convite";
+import type { InvitePayload } from "@/lib/auth/invite-token";
 
 /** Normaliza o nome da empresa para um slug candidato (citext unique no DB). */
 export function slugify(name: string): string {
@@ -57,6 +59,52 @@ export async function ensureTenantForUser(
     .limit(1)
     .maybeSingle();
   if (existing) return { provisioned: false, organizationId: existing.organization_id };
+
+  // CONVITE SEM invite_token NO METADATA não é "ninguém convidou" — pode ser
+  // só o link errado (cadastro genérico em vez do link com token, ou o
+  // e-mail de convite que nunca saiu por RESEND_API_KEY ausente). Sem esta
+  // checagem, quem foi convidado e caiu aqui ganha uma organização própria,
+  // fantasma, e o convite real fica "Pendente" para sempre — achado real,
+  // não hipotético: e-mail nunca chega, pessoa cai no cadastro comum, cria
+  // conta sem organização nenhuma.
+  //
+  // Seguro contra enumeração (diferente de checar na TELA de cadastro, antes
+  // de provar posse do e-mail): este ponto só roda depois que o e-mail já foi
+  // confirmado pelo provedor de auth (link clicado) ou a sessão de signup já
+  // foi aberta — nunca para um visitante anônimo testando endereços.
+  const emailNormalizado = (user.email ?? "").trim().toLowerCase();
+  if (emailNormalizado) {
+    const { data: convitePendente } = await admin
+      .from("team_invites")
+      .select("id, organization_id, role, interface_settings, invited_by, created_at, expires_at")
+      .ilike("email", emailNormalizado)
+      .is("accepted_at", null)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (convitePendente) {
+      const payload: InvitePayload = {
+        invite_id: convitePendente.id,
+        email: emailNormalizado,
+        organization_id: convitePendente.organization_id,
+        role: convitePendente.role as InvitePayload["role"],
+        exp: Math.floor(new Date(convitePendente.expires_at).getTime() / 1000),
+        iat: Math.floor(new Date(convitePendente.created_at).getTime() / 1000),
+        invited_by: convitePendente.invited_by ?? undefined,
+        interface_settings: convitePendente.interface_settings ?? undefined,
+      };
+      const aceite = await aplicarConvite({ userId: user.id, payload });
+      if (aceite.ok) {
+        return { provisioned: true, organizationId: payload.organization_id };
+      }
+      // Convite revogado bem no meio desta chamada, ou banco fora: cai para o
+      // caminho de sempre (organização própria) em vez de travar quem só
+      // queria terminar o cadastro.
+    }
+  }
 
   const orgName =
     (user.user_metadata?.org_name as string | undefined)?.trim() ||
